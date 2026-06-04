@@ -1,0 +1,40 @@
+# 1. Create your master folder
+mkdir My_ML_Master_Hub
+cd My_ML_Master_Hub
+
+# 2. Initialize Git
+git init
+
+# 3. Create the Core Engineering Folders
+mkdir core_engine
+mkdir projects
+mkdir templates
+
+# 4. Create the Master Python files (You will paste the code I gave you into these)
+touch core_engine/__init__.py
+touch core_engine/preprocessing.py
+touch core_engine/models.py
+touch core_engine/utils.py
+
+# 5. Create a template notebook for your 100 projects
+touch templates/00_master_template.ipynb
+
+# 6. Save your work to GitHub
+git add .
+git commit -m "Initial commit: Setting up ML Engineering Master Architecture"
+# (Then push to your GitHub account)
+
+# The "Kaggle Secret" Feature Engineering Layer
+def engineer_features(df):
+    # Creating a new feature by combining two existing ones
+    df['Income_to_Debt_Ratio'] = df['Salary'] / (df['Total_Debt'] + 1)
+    
+    # Extracting high-value time features
+    df['Is_Weekend'] = df['Date'].dt.dayofweek >= 5
+    
+    # Target Encoding (Very popular on Kaggle for categorical data)
+    # E.g., Replacing 'City' with the average historical sales of that 'City'
+    city_means = df.groupby('City')['Sales'].transform('mean')
+    df['City_Historical_Sales'] = city_means
+    
+    return df
