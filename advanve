@@ -1,0 +1,105 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import joblib
+
+# Sklearn Suite
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, learning_curve
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, r2_score, mean_squared_error
+
+# Configuration
+sns.set(style="whitegrid")
+
+
+def build_universal_pipeline(model, num_features, cat_features):
+    # Branching transformation logic
+    num_pipe = Pipeline([('imputer', SimpleImputer(strategy='median')), ('scaler', StandardScaler())])
+    cat_pipe = Pipeline([('imputer', SimpleImputer(strategy='constant')), ('encoder', OneHotEncoder(handle_unknown='ignore'))])
+    
+    preprocessor = ColumnTransformer([('num', num_pipe, num_features), ('cat', cat_pipe, cat_features)])
+    
+    return Pipeline([('preprocessor', preprocessor), ('model', model)])
+
+
+def evaluate(y_true, y_pred, task='classification'):
+    if task == 'classification':
+        print(classification_report(y_true, y_pred))
+        sns.heatmap(confusion_matrix(y_true, y_pred), annot=True, fmt='d', cmap='Blues')
+    else:
+        print(f"R2 Score: {r2_score(y_true, y_pred):.4f}")
+        print(f"MSE: {mean_squared_error(y_true, y_pred):.4f}")
+        plt.scatter(y_true, y_pred, alpha=0.3)
+    plt.show()
+
+
+def get_best_model(pipeline, param_grid, X, y):
+    grid = GridSearchCV(pipeline, param_grid, cv=5, n_jobs=-1)
+    grid.fit(X, y)
+    print(f"Best Params: {grid.best_params_}")
+    return grid.best_estimator_
+
+# Ensemble Factory
+def create_ensemble(models):
+    # models list format: [('rf', RandomForestClassifier()), ('lr', LogisticRegression())]
+    return VotingClassifier(estimators=models, voting='hard')
+
+
+def plot_learning_curve(model, X, y):
+    train_sizes, train_scores, test_scores = learning_curve(model, X, y, cv=5)
+    plt.plot(train_sizes, np.mean(train_scores, axis=1), label='Train')
+    plt.plot(train_sizes, np.mean(test_scores, axis=1), label='Val')
+    plt.legend(); plt.show()
+
+def save_and_load(model, action='save', filename='model.pkl'):
+    if action == 'save': joblib.dump(model, filename)
+    else: return joblib.load(filename)
+
+
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import randint, uniform
+
+def perform_random_search(pipeline, param_distributions, X, y, n_iter=20):
+    # Faster than GridSearch for large search spaces
+    random_search = RandomizedSearchCV(
+        pipeline, 
+        param_distributions=param_distributions, 
+        n_iter=n_iter, 
+        cv=5, 
+        n_jobs=-1, 
+        random_state=42
+    )
+    random_search.fit(X, y)
+    print(f"Best Params (Random): {random_search.best_params_}")
+    return random_search.best_estimator_
+
+# Example Dictionary for Hyperparameters
+# Use this to easily swap between models in your Pipeline
+param_maps = {
+    'RandomForest': {
+        'model__n_estimators': randint(50, 200),
+        'model__max_depth': [None, 10, 20],
+        'model__min_samples_split': randint(2, 10)
+    },
+    'LogisticRegression': {
+        'model__C': [0.1, 1.0, 10.0],
+        'model__solver': ['liblinear', 'lbfgs']
+    }
+}
+
+
+# To inspect current model parameters before tuning:
+def get_model_params(pipeline):
+    print("Available parameters to tune:")
+    for param in pipeline.get_params().keys():
+        print(param)
+
+# Example Usage:
+# pipe = build_universal_pipeline(RandomForestClassifier(), num_cols, cat_cols)
+# get_model_params(pipe)
