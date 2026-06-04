@@ -1,0 +1,69 @@
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
+
+# Define the library of models
+regression_models = {
+    'Linear': LinearRegression(),
+    'SVM': SVR(),
+    'KNN': KNeighborsRegressor(),
+    'Tree': DecisionTreeRegressor(),
+    'RF': RandomForestRegressor(),
+    'GBM': GradientBoostingRegressor()
+}
+
+def benchmark_models(X_train, y_train, X_test, y_test, num_cols, cat_cols):
+    results = {}
+    
+    for name, model in regression_models.items():
+        # Build Pipeline for current model
+        pipe = build_universal_pipeline(model, num_cols, cat_cols)
+        
+        # Cross-Validation (The reliability check)
+        cv_scores = cross_val_score(pipe, X_train, y_train, cv=5, scoring='r2')
+        
+        # Train & Evaluate
+        pipe.fit(X_train, y_train)
+        y_pred = pipe.predict(X_test)
+        
+        results[name] = {
+            'CV_Mean': cv_scores.mean(),
+            'Test_R2': r2_score(y_test, y_pred),
+            'Test_MSE': mean_squared_error(y_test, y_pred)
+        }
+        print(f"Finished {name}")
+        
+    return pd.DataFrame(results).T
+
+
+# Select top 3 models based on performance
+ensemble = VotingRegressor([
+    ('rf', RandomForestRegressor()),
+    ('gbm', GradientBoostingRegressor()),
+    ('svm', SVR())
+])
+
+# Build, Tune, and Compare against individual models
+ensemble_pipe = build_universal_pipeline(ensemble, num_cols, cat_cols)
+ensemble_pipe.fit(X_train, y_train)
+
+
+from sklearn.ensemble import (
+    BaggingRegressor, 
+    AdaBoostRegressor, 
+    StackingRegressor
+)
+from xgboost import XGBRegressor # Ensure xgboost is installed
+
+# Advanced Ensemble Setup
+advanced_ensembles = {
+    'Bagging': BaggingRegressor(estimator=DecisionTreeRegressor(), n_estimators=50),
+    'AdaBoost': AdaBoostRegressor(n_estimators=50),
+    'XGBoost': XGBRegressor(n_estimators=100, learning_rate=0.1),
+    'Stacking': StackingRegressor(
+        estimators=[('rf', RandomForestRegressor()), ('svr', SVR())],
+        final_estimator=LinearRegression()
+    )
+}
