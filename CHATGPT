@@ -1,0 +1,660 @@
+If you don't have access to Creo View SDK, Creo Toolkit, or any external CAD software, then unfortunately:
+
+You cannot do true background rendering from a .PVZ file.
+
+A PVZ file is a lightweight visualization package that contains tessellated/viewable data and is intended to be opened by Creo View-related software. It is not a format that Python libraries like OpenCV, Open3D, Trimesh, CadQuery, or Open Cascade can directly render.
+
+Your realistic options are:
+Option 1: Extract the PVZ and inspect contents
+import zipfile
+
+with zipfile.ZipFile("model.pvz") as z:
+    z.extractall("pvz_contents")
+    print(z.namelist())
+
+PVZ is essentially a compressed package and may contain files such as .ol, .pvs, .ed, or .edz.
+
+After extraction, check:
+
+If you find .jt files → you may be able to use a JT reader.
+If you find .obj or mesh files → you can render with Python.
+If you only find .ol, .pvs, .edz → those are PTC-specific formats and are difficult to render without PTC software.
+Option 2: Improve your current screenshot method
+
+If you're stuck with PyAutoGUI:
+
+Use Win32 APIs instead of full-screen screenshots.
+Capture only the application window.
+Use PrintWindow() from Windows API.
+Avoid moving the mouse.
+
+This can be 5–20× faster than PyAutoGUI screenshots.
+
+Option 3: Find a hidden renderable file inside PVZ
+
+Many PVZ packages contain internal visualization files. If one of those is a standard mesh format, you can render it headlessly with Python.
+
+What I need from you
+
+Run the extraction code above and send me the output of:
+
+print(z.namelist())
+
+or a screenshot of the extracted files.
+
+Once I see the actual contents of your PVZ, I can tell you whether there is a way to capture images completely in the background using Python only, or whether you're limited to window capture automation.
+
+WHY WE CAN NOT USE CREO VIWER
+
+Looking at your screenshot, you already have Creo View installed and opening the PVZ successfully.
+
+So the answer is:
+
+Yes, you can use Creo View.
+The real question is whether you can use it without screen capture and without the SDK.
+
+What is happening now?
+
+Your Python script likely does:
+
+Open PVZ in Creo View.
+Rotate the model.
+Use PyAutoGUI screenshot.
+Save PNG.
+
+This is slow because it's capturing pixels from the desktop.
+
+Faster Method: Capture the Window Directly
+
+Instead of:
+
+pyautogui.screenshot()
+
+Use the Windows API:
+
+import win32gui
+import win32ui
+import win32con
+
+and PrintWindow().
+
+Benefits:
+
+Doesn't move the mouse.
+Doesn't capture the entire screen.
+Can capture a window even if partially covered.
+Usually 5–10× faster.
+Even Better: Hidden Window Capture
+
+If Creo View supports rendering while minimized (many CAD viewers do not), you can:
+
+win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+
+and capture via PrintWindow().
+
+However, some OpenGL/DirectX applications return a black image when hidden.
+
+Test This First
+import win32gui
+
+def enum_windows(hwnd, windows):
+    title = win32gui.GetWindowText(hwnd)
+    if "Creo View" in title:
+        print(hwnd, title)
+
+windows = []
+win32gui.EnumWindows(enum_windows, windows)
+
+Get the Creo View window handle.
+
+Then test PrintWindow().
+
+What I would do
+
+Since you don't have:
+
+Creo View SDK
+Creo Toolkit
+External CAD libraries
+
+the best architecture is:
+
+PVZ
+ ↓
+Creo View
+ ↓
+Windows PrintWindow()
+ ↓
+PNG
+
+instead of
+
+PVZ
+ ↓
+Creo View
+ ↓
+PyAutoGUI Screenshot
+ ↓
+PNG
+
+This is usually the biggest performance improvement available without buying or installing additional software.
+
+Can you tell me:
+
+How many images are you generating per model?
+Are you rotating the model manually through keyboard shortcuts or by dragging the mouse?
+Is the model always shown in the same isometric orientation?
+
+I can then give you a complete Python script using win32gui + PrintWindow that captures the Creo View window directly.
+
+For the download part, yes — it is already essentially headless.
+
+This code:
+
+requests.get(link)
+
+runs completely in the background:
+
+No browser
+No Chrome
+No Edge
+No GUI
+No mouse movement
+
+So the PVZ download process is already headless.
+
+For the image capture part, the answer is different.
+
+Your current workflow:
+
+PVZ
+ ↓
+Creo View GUI
+ ↓
+PyAutoGUI
+ ↓
+Screenshot
+
+is not headless.
+
+To make it headless, one of these must be true:
+
+Option 1: Creo View SDK
+PVZ
+ ↓
+Creo View API
+ ↓
+Render PNG
+
+No GUI required.
+
+Option 2: Extract Geometry from PVZ
+PVZ
+ ↓
+Mesh/JT/OBJ
+ ↓
+Python Renderer
+ ↓
+PNG
+
+No GUI required.
+
+Option 3: Windows Service
+
+Run Creo View hidden and use API calls.
+
+But this still requires Creo View support.
+
+Your Situation
+
+You told me:
+
+You only have .pvz
+No SDK
+No external software access
+Current solution uses PyAutoGUI
+
+Under those constraints:
+
+❌ You cannot make the image generation fully headless.
+
+Because Python cannot directly render a proprietary PVZ file.
+
+What You Can Do
+
+A semi-headless approach:
+
+Download PVZ (headless)
+ ↓
+Launch Creo View
+ ↓
+Capture Creo window using Win32 PrintWindow()
+ ↓
+Save PNG
+
+Advantages:
+
+No mouse movement
+No screen interaction
+User can continue working
+Much faster than PyAutoGUI
+
+This is probably the closest you can get without SDK access.
+
+I have one question:
+
+When you unzip a PVZ file, what files are inside?
+
+Run:
+
+import zipfile
+
+with zipfile.ZipFile("sample.pvz") as z:
+    print(z.namelist())
+
+and paste the output.
+
+If I see something like:
+
+model.jt
+model.obj
+model.stl
+
+then I can show you a 100% headless Python renderer and eliminate Creo View completely. If it's only PTC proprietary files (.ol, .pvs, .edz), then you're limited to using Creo View in some form.
+
+"import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+from PIL import Image, ImageChops
+import xlsxwriter
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+# ---------------- TIMER (BOTTOM LEFT) ---------------- #
+
+def show_browser_countdown(driver, seconds):
+
+    # ✅ Wait until document is fully ready
+    WebDriverWait(driver, 20).until(
+        lambda d: d.execute_script(""return document.readyState"") == ""complete""
+    )
+
+    # ✅ Extra safety wait
+    time.sleep(2)
+
+    # ✅ Inject safely (retry mechanism)
+    for _ in range(5):
+        success = driver.execute_script(""""""
+            if (document.body) {
+                let old = document.getElementById('customTimer');
+                if (old) old.remove();
+
+                let div = document.createElement('div');
+                div.id = 'customTimer';
+
+                div.style.position = 'fixed';
+                div.style.bottom = '20px';
+                div.style.left = '20px';
+
+                div.style.padding = '10px 20px';
+                div.style.background = 'rgba(0,0,0,0.85)';
+                div.style.color = 'white';
+                div.style.fontSize = '16px';
+                div.style.fontWeight = 'bold';
+                div.style.zIndex = '999999';
+                div.style.borderRadius = '6px';
+
+                div.innerText = ""Loading..."";
+                document.body.appendChild(div);
+
+                return true;
+            }
+            return false;
+        """""")
+
+        if success:
+            break
+
+        time.sleep(1)
+
+    # ❌ If still not ready → skip safely (no crash)
+    if not success:
+        print(""[WARN] Could not inject timer"")
+        return
+
+    # ✅ Countdown
+    for i in range(seconds, 0, -1):
+        driver.execute_script(f""""""
+            let el = document.getElementById('customTimer');
+            if (el) el.innerText = ""Loading... {i}s"";
+        """""")
+        time.sleep(1)
+
+    driver.execute_script(""""""
+        let el = document.getElementById('customTimer');
+        if (el) el.innerText = ""Done"";
+    """""")
+
+    time.sleep(2)
+
+    driver.execute_script(""""""
+        let el = document.getElementById('customTimer');
+        if (el) el.remove();
+    """""")
+
+
+
+# ---------------- FILE HANDLING ---------------- #
+
+def get_excel_file():
+    file = Path.cwd() / ""SPA_Today.xlsx""
+
+    if not file.exists():
+        raise FileNotFoundError(""SPA_Today.xlsx not found"")
+
+    print(f""[INFO] Using Excel: {file}"")
+    return file
+
+
+def get_parts(file):
+    df = pd.read_excel(file, usecols=[""Material""])
+    parts = df[""Material""].dropna().astype(str).unique().tolist()
+    print(f""[INFO] Loaded {len(parts)} parts"")
+    return parts
+
+
+# ---------------- START ---------------- #
+
+print(""[START] Initializing"")
+
+excel_file = get_excel_file()
+PART_LIST = get_parts(excel_file)
+
+
+# ---------------- FOLDER STRUCTURE ---------------- #
+
+BASE = Path.cwd() / ""Results""
+today = datetime.now().strftime(""%Y-%m-%d"")
+RUN = BASE / today
+
+RAW_IMAGE_DIR = RUN / ""Part image""
+CROP_IMAGE_DIR = RUN / ""Part croped image""
+OUTPUT_DIR = RUN / ""Output sheet""
+
+# Create folders
+RAW_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+CROP_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Excel output inside Output sheet
+timestamp = datetime.now().strftime(""%H%M%S"")
+excel_out = OUTPUT_DIR / f""Parts_Report_{today}_{timestamp}.xlsx""
+
+
+# ---------------- CONFIG ---------------- #
+
+URL_BASE = ""https://3dpv.deere.com/?partnumber=""
+LEFT, TOP, RIGHT, BOTTOM = 400, 150, 1450, 800
+
+
+# ---------------- MODE ---------------- #
+
+print(""=""*60)
+print(f""[INFO] Run Folder: {RUN}"")
+print(""=""*60)
+print(""1 = Fresh\n2 = Resume"")
+choice = input(""Select: "").strip()
+
+final_parts = []
+for p in PART_LIST:
+    img = CROP_IMAGE_DIR / f""{p}.png""
+    if choice == ""2"" and img.exists():
+        print(f""[SKIP] {p}"")
+    else:
+        final_parts.append(p)
+
+
+# ---------------- SELENIUM ---------------- #
+
+options = Options()
+options.add_argument(""--start-maximized"")
+
+driver = webdriver.Chrome(
+    service=Service(ChromeDriverManager().install()),
+    options=options
+)
+
+start = time.time()
+
+for i, part in enumerate(final_parts, 1):
+
+    print(f""\n[PROGRESS] {i}/{len(final_parts)} -> {part}"")
+
+    try:
+        url = f""{URL_BASE}{part}""
+        driver.get(url)
+
+        time.sleep(3)
+
+        show_browser_countdown(driver, 20)
+
+        raw_path = RAW_IMAGE_DIR / f""{part}_raw.png""
+        crop_path = CROP_IMAGE_DIR / f""{part}.png""
+
+        # ✅ Save RAW image
+        driver.save_screenshot(str(raw_path))
+
+        # ✅ Crop + Trim
+        img = Image.open(raw_path)
+        crop = img.crop((LEFT, TOP, RIGHT, BOTTOM))
+
+        bg = Image.new(""RGB"", crop.size, (255,255,255))
+        diff = ImageChops.difference(crop.convert(""RGB""), bg).convert(""L"")
+        diff = diff.point(lambda x: 0 if x < 55 else 255)
+
+        bbox = diff.getbbox()
+        if bbox:
+            crop = crop.crop(bbox)
+
+        crop.save(crop_path)
+
+        print(f""[SUCCESS] Saved cropped image: {part}"")
+
+    except Exception as e:
+        print(f""[ERROR] {part}: {e}"")
+
+driver.quit()
+
+
+# ---------------- EXCEL ---------------- #
+
+print(""\n[ENGINE] Writing Excel"")
+
+wb = xlsxwriter.Workbook(str(excel_out))
+ws = wb.add_worksheet(""Report"")
+
+ws.write(0,0,""Part"")
+ws.write(0,1,""Image"")
+
+ws.set_column(0,0,25)
+ws.set_column(1,1,35)
+
+row = 1
+
+for part in PART_LIST:
+    img = CROP_IMAGE_DIR / f""{part}.png""
+
+    if not img.exists():
+        continue
+
+    print(f""[EXCEL] {row} -> {part}"")
+
+    ws.write(row, 0, part)
+    ws.set_row(row, 140)
+
+    try:
+        ws.embed_image(row, 1, str(img))
+    except:
+        print(f""[WARN] Could not insert {part}"")
+
+    row += 1
+
+wb.close()
+
+
+# ---------------- COMPLETE ---------------- #
+
+total = time.time() - start
+
+print(""=""*60)
+print(""[COMPLETE] Run finished"")
+print(f""[TIME] {int(total//60)}m {int(total%60)}s"")
+print(f""[OUTPUT] {excel_out}"")
+print(""=""*60)"
+
+This Selenium code can be made almost headless, unlike your Creo View solution.
+
+Right now you have:
+
+options = Options()
+options.add_argument("--start-maximized")
+
+Change it to:
+
+options = Options()
+
+options.add_argument("--headless=new")
+options.add_argument("--window-size=1920,1080")
+
+options.add_argument("--disable-gpu")
+options.add_argument("--no-s
+CAN YOU GIVE ME ROBUST CODE
+
+Yes. For your 3DPV Deere Selenium image capture project, I would make it fully headless and much more robust like this:
+
+Replace your Selenium setup section
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+options = Options()
+
+# Headless Mode
+options.add_argument("--headless=new")
+
+# Fixed resolution
+options.add_argument("--window-size=1920,1080")
+
+# Stability
+options.add_argument("--disable-gpu")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+
+# Faster
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-infobars")
+
+# Prevent automation detection
+options.add_argument("--disable-blink-features=AutomationControlled")
+
+driver = webdriver.Chrome(
+    service=Service(ChromeDriverManager().install()),
+    options=options
+)
+Replace
+time.sleep(3)
+show_browser_countdown(driver, 20)
+
+with
+
+WebDriverWait(driver, 30).until(
+    lambda d: d.execute_script(
+        "return document.readyState"
+    ) == "complete"
+)
+
+time.sleep(5)
+
+This saves about 15-20 seconds per part.
+
+Better Screenshot Method
+
+Instead of:
+
+driver.save_screenshot(str(raw_path))
+
+use:
+
+driver.set_window_size(1920, 1080)
+
+driver.save_screenshot(str(raw_path))
+
+before every screenshot.
+
+This guarantees identical image dimensions.
+
+Even Better (Element Screenshot)
+
+If the model viewer has a fixed element:
+
+viewer = driver.find_element(By.CSS_SELECTOR, "canvas")
+viewer.screenshot(str(raw_path))
+
+This is:
+
+Faster
+Smaller images
+No cropping needed
+Massive Speed Gain
+
+Current code:
+
+3 sec sleep
+20 sec countdown
+save screenshot
+crop
+
+≈ 25 sec per part
+
+Optimized:
+
+wait until page ready
+5 sec render
+save screenshot
+crop
+
+≈ 6-8 sec per part
+
+If you have:
+
+500 parts
+
+Current:
+
+500 × 25 sec
+= 3.5 hours
+
+Optimized:
+
+500 × 7 sec
+= ~58 minutes
+For the PVZ + Creo View Project
+
+Unfortunately, you cannot make that fully headless unless:
+
+You have Creo View SDK, or
+The PVZ contains a standard mesh format.
+
+For the 3DPV Selenium project, however, headless mode is absolutely the right approach and should work well.
