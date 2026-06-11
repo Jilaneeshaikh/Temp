@@ -1,0 +1,588 @@
+Below is a complete starter script that:
+
+✅ Finds latest date folder automatically
+
+✅ Reads SPA_Today.xlsx
+
+✅ Creates Packaging_Report.xlsx
+
+✅ Copies Material column
+
+✅ Creates your exact layout
+
+✅ Adds XLOOKUP formulas in H and I
+
+❌ Does NOT insert images yet (we'll add that later)
+
+import pandas as pd
+from pathlib import Path
+from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font
+
+# =====================================================
+# FIND LATEST RESULTS FOLDER
+# =====================================================
+
+BASE_DIR = Path.cwd()
+RESULTS_DIR = BASE_DIR / "Results"
+
+date_folders = [f for f in RESULTS_DIR.iterdir() if f.is_dir()]
+
+if not date_folders:
+    raise Exception("No Results folders found")
+
+DATE_FOLDER = max(
+    date_folders,
+    key=lambda x: x.stat().st_mtime
+)
+
+print(f"[INFO] Using Folder: {DATE_FOLDER}")
+
+# =====================================================
+# FOLDERS
+# =====================================================
+
+INPUT_DIR = DATE_FOLDER / "Input"
+OUTPUT_DIR = DATE_FOLDER / "Output sheet"
+
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+# =====================================================
+# FIND SPA FILE
+# =====================================================
+
+spa_file = None
+
+for f in INPUT_DIR.glob("*.xlsx"):
+
+    if "spa" in f.name.lower():
+        spa_file = f
+        break
+
+if not spa_file:
+    raise Exception("SPA file not found")
+
+print(f"[INFO] SPA File: {spa_file.name}")
+
+# =====================================================
+# READ SPA FILE
+# =====================================================
+
+df = pd.read_excel(spa_file)
+
+if "Material" not in df.columns:
+    raise Exception("Material column not found")
+
+materials = (
+    df["Material"]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .unique()
+)
+
+print(f"[INFO] Materials Found: {len(materials)}")
+
+# =====================================================
+# CREATE WORKBOOK
+# =====================================================
+
+wb = Workbook()
+ws = wb.active
+
+ws.title = "Packaging Report"
+
+# =====================================================
+# HEADERS
+# =====================================================
+
+headers = [
+    "Material",      # A
+    "Part Image",    # B
+    "",              # C
+    "",              # D
+    "",              # E
+    "",              # F
+    "",              # G
+    "Container",     # H
+    "Qty",           # I
+    "",              # J
+    "",              # K
+    "Packaging ISO", # L
+    "Packaging TOP"  # M
+]
+
+for col_num, header in enumerate(headers, start=1):
+
+    cell = ws.cell(row=1, column=col_num)
+
+    cell.value = header
+    cell.font = Font(bold=True)
+
+# =====================================================
+# COLUMN WIDTHS
+# =====================================================
+
+ws.column_dimensions["A"].width = 20
+ws.column_dimensions["B"].width = 25
+
+ws.column_dimensions["H"].width = 20
+ws.column_dimensions["I"].width = 15
+
+ws.column_dimensions["L"].width = 25
+ws.column_dimensions["M"].width = 25
+
+# =====================================================
+# MATERIAL DATA
+# =====================================================
+
+row = 2
+
+for material in materials:
+
+    ws[f"A{row}"] = material
+
+    # Container Formula
+    ws[f"H{row}"] = (
+        f'=XLOOKUP(A{row},'
+        f'Container!A:A,'
+        f'Container!B:B,"")'
+    )
+
+    # Qty Formula
+    ws[f"I{row}"] = (
+        f'=XLOOKUP(A{row},'
+        f'Container!A:A,'
+        f'Container!C:C,"")'
+    )
+
+    row += 1
+
+# =====================================================
+# SAVE
+# =====================================================
+
+output_file = OUTPUT_DIR / "Packaging_Report.xlsx"
+
+wb.save(output_file)
+
+print("=" * 60)
+print("[SUCCESS]")
+print(f"Saved: {output_file}")
+print("=" * 60)
+Result Layout
+A = Material
+
+B = Part Image
+
+C = Empty
+D = Empty
+E = Empty
+F = Empty
+G = Empty
+
+H = Container (XLOOKUP)
+
+I = Qty (XLOOKUP)
+
+J = Empty
+K = Empty
+
+L = Packaging ISO
+
+M = Packaging TOP
+Next Step
+
+After this works, we'll add:
+
+Part croped image/*.png  → Column B
+
+Packaging Croped Image/*_ISO.png → Column L
+
+Packaging Croped Image/*_TOP.png → Column M
+
+with automatic image insertion. That will be Version 2 of the script.
+
+YES GUVE ME IMAGE INSERTING CODE
+
+Perfect. Add this code after the Material loop and before wb.save(output_file).
+
+Required Import
+
+Add at the top:
+
+from openpyxl.drawing.image import Image
+Image Folder Paths
+
+Add after:
+
+OUTPUT_DIR = DATE_FOLDER / "Output sheet"
+
+Add:
+
+PART_IMAGE_DIR = DATE_FOLDER / "Part croped image"
+
+PACKAGING_IMAGE_DIR = DATE_FOLDER / "Packaging Croped Image"
+Insert Images
+
+Add this block before SAVE section:
+
+# =====================================================
+# INSERT IMAGES
+# =====================================================
+
+print("[INFO] Inserting Images...")
+
+for row in range(2, len(materials) + 2):
+
+    material = str(ws[f"A{row}"].value).strip()
+
+    # --------------------------------
+    # PART IMAGE (COLUMN B)
+    # --------------------------------
+
+    part_img = PART_IMAGE_DIR / f"{material}.png"
+
+    if part_img.exists():
+
+        try:
+
+            img = Image(str(part_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(img, f"B{row}")
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] Part Image {material}: {e}"
+            )
+
+    # --------------------------------
+    # ISO IMAGE (COLUMN L)
+    # --------------------------------
+
+    iso_img = (
+        PACKAGING_IMAGE_DIR /
+        f"{material}_ISO.png"
+    )
+
+    if iso_img.exists():
+
+        try:
+
+            img = Image(str(iso_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(img, f"L{row}")
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] ISO Image {material}: {e}"
+            )
+
+    # --------------------------------
+    # TOP IMAGE (COLUMN M)
+    # --------------------------------
+
+    top_img = (
+        PACKAGING_IMAGE_DIR /
+        f"{material}_TOP.png"
+    )
+
+    if top_img.exists():
+
+        try:
+
+            img = Image(str(top_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(img, f"M{row}")
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] TOP Image {material}: {e}"
+            )
+
+    # Increase Row Height
+    ws.row_dimensions[row].height = 75
+Better Column Widths
+
+Replace your width section with:
+
+ws.column_dimensions["A"].width = 20
+
+ws.column_dimensions["B"].width = 25
+
+ws.column_dimensions["H"].width = 18
+ws.column_dimensions["I"].width = 12
+
+ws.column_dimensions["L"].width = 25
+ws.column_dimensions["M"].width = 25
+Expected File Names
+Part Images
+Part croped image
+
+RE12345.png
+RE12346.png
+RE12347.png
+Packaging Images
+Packaging Croped Image
+
+RE12345_ISO.png
+RE12345_TOP.png
+
+RE12346_ISO.png
+RE12346_TOP.png
+Final Output
+A = Material
+
+B = Part Image
+
+C-G = Empty
+
+H = Container
+
+I = Qty
+
+J-K = Empty
+
+L = Packaging ISO
+
+M = Packaging TOP
+
+with actual images embedded directly into Excel. This is exactly how I would build the first working version before adding advanced features like missing-image reports and automatic image scaling.
+
+GIVE ME FULL CODE FOR IMAGE SISNERT
+
+Since you're building this professionally, I recommend separating image insertion into its own script.
+
+This script assumes:
+
+Results
+└── YYYY-MM-DD
+    ├── Part croped image
+    │   ├── RE12345.png
+    │   └── RE67890.png
+    │
+    ├── Packaging Croped Image
+    │   ├── RE12345_ISO.png
+    │   ├── RE12345_TOP.png
+    │   └── ...
+    │
+    └── Output sheet
+        └── Packaging_Report.xlsx
+
+And your Excel layout is:
+
+A = Material
+B = Part Image
+
+H = Container
+I = Qty
+
+L = Packaging ISO
+M = Packaging TOP
+Image Insertion Script
+from pathlib import Path
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
+
+# =====================================================
+# FIND LATEST DATE FOLDER
+# =====================================================
+
+BASE_DIR = Path.cwd()
+RESULTS_DIR = BASE_DIR / "Results"
+
+date_folders = [
+    f for f in RESULTS_DIR.iterdir()
+    if f.is_dir()
+]
+
+if not date_folders:
+    raise Exception("No Results folder found")
+
+DATE_FOLDER = max(
+    date_folders,
+    key=lambda x: x.stat().st_mtime
+)
+
+print(f"[INFO] Using Folder: {DATE_FOLDER}")
+
+# =====================================================
+# PATHS
+# =====================================================
+
+PART_IMAGE_DIR = DATE_FOLDER / "Part croped image"
+
+PACKAGING_IMAGE_DIR = (
+    DATE_FOLDER /
+    "Packaging Croped Image"
+)
+
+REPORT_FILE = (
+    DATE_FOLDER /
+    "Output sheet" /
+    "Packaging_Report.xlsx"
+)
+
+# =====================================================
+# LOAD EXCEL
+# =====================================================
+
+wb = load_workbook(REPORT_FILE)
+
+ws = wb.active
+
+# =====================================================
+# COLUMN WIDTHS
+# =====================================================
+
+ws.column_dimensions["B"].width = 25
+ws.column_dimensions["L"].width = 25
+ws.column_dimensions["M"].width = 25
+
+# =====================================================
+# PROCESS MATERIALS
+# =====================================================
+
+last_row = ws.max_row
+
+print(f"[INFO] Rows Found: {last_row}")
+
+for row in range(2, last_row + 1):
+
+    material = ws[f"A{row}"].value
+
+    if not material:
+        continue
+
+    material = str(material).strip()
+
+    # =================================================
+    # PART IMAGE
+    # =================================================
+
+    part_img = (
+        PART_IMAGE_DIR /
+        f"{material}.png"
+    )
+
+    if part_img.exists():
+
+        try:
+
+            img = Image(str(part_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(
+                img,
+                f"B{row}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] Part Image "
+                f"{material}: {e}"
+            )
+
+    # =================================================
+    # ISO IMAGE
+    # =================================================
+
+    iso_img = (
+        PACKAGING_IMAGE_DIR /
+        f"{material}_ISO.png"
+    )
+
+    if iso_img.exists():
+
+        try:
+
+            img = Image(str(iso_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(
+                img,
+                f"L{row}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] ISO Image "
+                f"{material}: {e}"
+            )
+
+    # =================================================
+    # TOP IMAGE
+    # =================================================
+
+    top_img = (
+        PACKAGING_IMAGE_DIR /
+        f"{material}_TOP.png"
+    )
+
+    if top_img.exists():
+
+        try:
+
+            img = Image(str(top_img))
+
+            img.width = 120
+            img.height = 90
+
+            ws.add_image(
+                img,
+                f"M{row}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"[ERROR] TOP Image "
+                f"{material}: {e}"
+            )
+
+    # =================================================
+    # ROW HEIGHT
+    # =================================================
+
+    ws.row_dimensions[row].height = 80
+
+# =====================================================
+# SAVE
+# =====================================================
+
+wb.save(REPORT_FILE)
+
+print("=" * 60)
+print("[SUCCESS]")
+print("Images inserted successfully")
+print(REPORT_FILE)
+print("=" * 60)
+Install Requirements
+pip install openpyxl pillow
+Run Order
+1. Create Packaging_Report.xlsx
+       ↓
+2. Run Image_Insert.py
+       ↓
+3. Images added to Excel
+
+This is much more reliable than mixing report generation and image insertion in one giant script.
