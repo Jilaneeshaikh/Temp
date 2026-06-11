@@ -1,0 +1,85 @@
+from openpyxl import load_workbook
+from pathlib import Path
+
+# =====================================================
+# CONFIGURATION
+# =====================================================
+
+EXCEL_FILE = "Final_Report.xlsx"
+SHEET_NAME = "Report"
+
+# =====================================================
+# FORMULAS
+# =====================================================
+
+FORMULAS = {
+
+    "Container": {
+        "column": "B",
+        "formula": '=XLOOKUP(A{row},Container!A:A,Container!B:B,"")'
+    },
+
+    "Qty": {
+        "column": "C",
+        "formula": '=XLOOKUP(A{row},Container!A:A,Container!C:C,"")'
+    },
+
+    "Packaging": {
+        "column": "D",
+        "formula": '=XLOOKUP(A{row},Packaging!A:A,Packaging!B:B,"")'
+    }
+
+}
+
+# =====================================================
+# LOAD WORKBOOK
+# =====================================================
+
+print("[INFO] Opening workbook...")
+
+wb = load_workbook(EXCEL_FILE)
+
+ws = wb[SHEET_NAME]
+
+# =====================================================
+# FIND LAST MATERIAL ROW
+# =====================================================
+
+last_row = ws.max_row
+
+while last_row > 1 and not ws[f"A{last_row}"].value:
+    last_row -= 1
+
+print(f"[INFO] Last Material Row: {last_row}")
+
+# =====================================================
+# APPLY FORMULAS
+# =====================================================
+
+for formula_name, config in FORMULAS.items():
+
+    column = config["column"]
+    formula_template = config["formula"]
+
+    print(f"[INFO] Filling {formula_name}")
+
+    for row in range(2, last_row + 1):
+
+        ws[f"{column}{row}"] = formula_template.format(
+            row=row
+        )
+
+# =====================================================
+# SAVE
+# =====================================================
+
+output_file = Path(EXCEL_FILE).with_name(
+    "Final_Report_With_Formulas.xlsx"
+)
+
+wb.save(output_file)
+
+print("=" * 60)
+print("[SUCCESS]")
+print(f"Saved: {output_file}")
+print("=" * 60)
