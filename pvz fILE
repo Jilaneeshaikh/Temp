@@ -1,0 +1,75 @@
+1. Add these imports
+
+Replace:
+
+import os
+import time
+import pyautogui
+
+with:
+
+import os
+import time
+import pyautogui
+import mss
+import mss.tools
+2. Change PyAutoGUI pause
+
+Replace:
+
+pyautogui.PAUSE = 0.3
+
+with:
+
+pyautogui.PAUSE = 0.05
+3. Replace the entire take_snapshot() function
+
+Find:
+
+def take_snapshot(filename):
+    pyautogui.screenshot(
+        os.path.join(IMAGE_DIR, filename),
+        region=(CROP_X, CROP_Y, CROP_W, CROP_H)
+    )
+
+Delete it completely and replace with:
+
+def take_snapshot(filename):
+    output = os.path.join(IMAGE_DIR, filename)
+
+    monitor = {
+        "left": CROP_X,
+        "top": CROP_Y,
+        "width": CROP_W,
+        "height": CROP_H
+    }
+
+    with mss.mss() as sct:
+        img = sct.grab(monitor)
+
+        mss.tools.to_png(
+            img.rgb,
+            img.size,
+            output=output
+        )
+Optional Speed Improvement
+
+Replace:
+
+time.sleep(20)
+
+with:
+
+time.sleep(10)
+
+Test with a few PVZ files first.
+
+Install MSS
+
+Run once:
+
+pip install mss
+
+or
+
+py -m pip install mss
