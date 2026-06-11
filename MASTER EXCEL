@@ -1,0 +1,277 @@
+Since I don't yet know your exact Container.xlsx and Packaging.xlsx column names, I'll give you a template that is easy to modify.
+
+Just change the values in the CONFIGURATION section.
+
+import pandas as pd
+from pathlib import Path
+from datetime import datetime
+import xlsxwriter
+
+# =====================================================
+# CONFIGURATION
+# =====================================================
+
+BASE_DIR = Path.cwd()
+
+today = datetime.now().strftime("%Y-%m-%d")
+
+DATE_FOLDER = BASE_DIR / "Results" / today
+
+INPUT_DIR = DATE_FOLDER / "Input"
+PART_IMAGE_DIR = DATE_FOLDER / "Part croped image"
+PACKAGING_IMAGE_DIR = DATE_FOLDER / "Packaging Croped Image"
+OUTPUT_DIR = DATE_FOLDER / "Output sheet"
+
+# ---------------- FILES ----------------
+
+MASTER_FILE = INPUT_DIR / "SPA_Today.xlsx"
+PACKAGING_FILE = INPUT_DIR / "Packaging.xlsx"
+CONTAINER_FILE = INPUT_DIR / "Container.xlsx"
+
+OUTPUT_FILE = OUTPUT_DIR / "Final_Report.xlsx"
+
+# =====================================================
+# COLUMN NAMES
+# MODIFY THESE IF REQUIRED
+# =====================================================
+
+MASTER_PART_COL = "Material"
+
+PACKAGING_PART_COL = "Material"
+PACKAGING_COL = "Packaging"
+
+CONTAINER_PART_COL = "Material"
+CONTAINER_COL = "Container"
+QTY_COL = "Qty"
+
+# =====================================================
+# READ FILES
+# =====================================================
+
+print("[INFO] Reading files...")
+
+master_df = pd.read_excel(MASTER_FILE)
+packaging_df = pd.read_excel(PACKAGING_FILE)
+container_df = pd.read_excel(CONTAINER_FILE)
+
+# =====================================================
+# CLEAN PART NUMBERS
+# =====================================================
+
+for df, col in [
+    (master_df, MASTER_PART_COL),
+    (packaging_df, PACKAGING_PART_COL),
+    (container_df, CONTAINER_PART_COL)
+]:
+    df[col] = (
+        df[col]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+# =====================================================
+# MASTER LIST
+# =====================================================
+
+result = master_df[[MASTER_PART_COL]].drop_duplicates()
+
+# =====================================================
+# MERGE PACKAGING
+# =====================================================
+
+result = pd.merge(
+    result,
+    packaging_df[
+        [PACKAGING_PART_COL, PACKAGING_COL]
+    ],
+    left_on=MASTER_PART_COL,
+    right_on=PACKAGING_PART_COL,
+    how="left"
+)
+
+# =====================================================
+# MERGE CONTAINER
+# =====================================================
+
+result = pd.merge(
+    result,
+    container_df[
+        [
+            CONTAINER_PART_COL,
+            CONTAINER_COL,
+            QTY_COL
+        ]
+    ],
+    left_on=MASTER_PART_COL,
+    right_on=CONTAINER_PART_COL,
+    how="left"
+)
+
+# =====================================================
+# IMAGE PATHS
+# =====================================================
+
+part_images = []
+iso_images = []
+top_images = []
+remarks = []
+
+for part in result[MASTER_PART_COL]:
+
+    part_img = PART_IMAGE_DIR / f"{part}.png"
+
+    iso_img = PACKAGING_IMAGE_DIR / f"{part}_ISO.png"
+
+    top_img = PACKAGING_IMAGE_DIR / f"{part}_TOP.png"
+
+    part_images.append(str(part_img) if part_img.exists() else "")
+    iso_images.append(str(iso_img) if iso_img.exists() else "")
+    top_images.append(str(top_img) if top_img.exists() else "")
+
+    missing = []
+
+    if not part_img.exists():
+        missing.append("Part Image")
+
+    if not iso_img.exists():
+        missing.append("ISO Image")
+
+    if not top_img.exists():
+        missing.append("TOP Image")
+
+    remarks.append(
+        "OK" if not missing
+        else "Missing: " + ", ".join(missing)
+    )
+
+result["Part Image"] = part_images
+result["ISO Image"] = iso_images
+result["TOP Image"] = top_images
+result["Remark"] = remarks
+
+# =====================================================
+# EXCEL OUTPUT
+# =====================================================
+
+print("[INFO] Creating Excel report...")
+
+workbook = xlsxwriter.Workbook(str(OUTPUT_FILE))
+worksheet = workbook.add_worksheet("Report")
+
+headers = [
+    "Material",
+    "Part Image",
+    "Container",
+    "Qty",
+    "ISO Image",
+    "TOP Image",
+    "Packaging",
+    "Remark"
+]
+
+for col_num, header in enumerate(headers):
+    worksheet.write(0, col_num, header)
+
+worksheet.set_column(0, 0, 25)
+worksheet.set_column(1, 5, 25)
+worksheet.set_column(6, 7, 30)
+
+row = 1
+
+for _, r in result.iterrows():
+
+    worksheet.set_row(row, 120)
+
+    worksheet.write(row, 0, r[MASTER_PART_COL])
+
+    worksheet.write(
+        row,
+        2,
+        r.get(CONTAINER_COL, "")
+    )
+
+    worksheet.write(
+        row,
+        3,
+        r.get(QTY_COL, "")
+    )
+
+    worksheet.write(
+        row,
+        6,
+        r.get(PACKAGING_COL, "")
+    )
+
+    worksheet.write(
+        row,
+        7,
+        r["Remark"]
+    )
+
+    # PART IMAGE
+    if r["Part Image"]:
+        worksheet.insert_image(
+            row,
+            1,
+            r["Part Image"],
+            {
+                "x_scale": 0.35,
+                "y_scale": 0.35
+            }
+        )
+
+    # ISO IMAGE
+    if r["ISO Image"]:
+        worksheet.insert_image(
+            row,
+            4,
+            r["ISO Image"],
+            {
+                "x_scale": 0.35,
+                "y_scale": 0.35
+            }
+        )
+
+    # TOP IMAGE
+    if r["TOP Image"]:
+        worksheet.insert_image(
+            row,
+            5,
+            r["TOP Image"],
+            {
+                "x_scale": 0.35,
+                "y_scale": 0.35
+            }
+        )
+
+    row += 1
+
+workbook.close()
+
+print("=" * 60)
+print("[SUCCESS] Final Report Created")
+print(OUTPUT_FILE)
+print("=" * 60)
+Install required packages
+pip install pandas openpyxl xlsxwriter pillow
+Expected image names
+
+Part image folder:
+
+RE12345.png
+RE67890.png
+
+Packaging image folder:
+
+RE12345_ISO.png
+RE12345_TOP.png
+
+RE67890_ISO.png
+RE67890_TOP.png
+
+This will generate:
+
+Material	Part Image	Container	Qty	ISO Image	TOP Image	Packaging	Remark
+
+with the actual images embedded into Excel.
